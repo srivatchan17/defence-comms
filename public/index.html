@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DefenceComms — Secure Login</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-box">
+
+      <div class="logo">
+        <div class="shield-icon">🛡️</div>
+        <h1>DefenceComms</h1>
+        <p>SECURE COMMUNICATIONS PLATFORM</p>
+      </div>
+
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="username" placeholder="Enter your username" autocomplete="off"/>
+      </div>
+
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="Enter your password"/>
+      </div>
+
+      <button class="btn-primary" onclick="login()">🔐 SECURE LOGIN</button>
+
+      <div class="error-msg" id="error-msg"></div>
+
+      <div class="secure-badge">
+        🔒 256-bit AES Encrypted · Defence VPN Protected
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Block right-click
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Block Ctrl+C, Ctrl+V, Ctrl+P (screenshot print)
+    document.addEventListener('keydown', e => {
+      if (e.ctrlKey && ['c','v','p','s'].includes(e.key)) {
+        e.preventDefault();
+        showDLP();
+      }
+    });
+
+    function showDLP() {
+      alert('⛔ Action blocked by DefenceComms DLP policy');
+    }
+
+    async function login() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const errorMsg = document.getElementById('error-msg');
+
+      if (!username || !password) {
+        errorMsg.style.display = 'block';
+        errorMsg.textContent = '⚠️ Please enter both username and password';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          // Save user info to session
+          sessionStorage.setItem('user', JSON.stringify(data.user));
+
+          // Redirect based on role
+          if (data.user.role === 'admin') {
+            window.location.href = 'admin.html';
+          } else {
+            window.location.href = 'chat.html';
+          }
+        } else {
+          errorMsg.style.display = 'block';
+          errorMsg.textContent = '⛔ ' + data.error;
+        }
+
+      } catch (err) {
+        errorMsg.style.display = 'block';
+        errorMsg.textContent = '⚠️ Cannot connect to server. Is it running?';
+      }
+    }
+
+    // Allow Enter key to login
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') login();
+    });
+  </script>
+</body>
+</html>

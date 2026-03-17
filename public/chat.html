@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DefenceComms — Secure Chat</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="dlp-warning" id="dlp-warning">
+    ⛔ Action blocked — Forwarding & copying disabled by DLP policy
+  </div>
+
+  <div class="chat-layout">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>🛡️ DefenceComms</h2>
+        <p>ENCRYPTED CHANNEL</p>
+      </div>
+      <div class="user-info">
+        <div class="name" id="user-name">Loading...</div>
+        <div class="role" id="user-role">...</div>
+      </div>
+      <div class="channel-list">
+        <h3>Channels</h3>
+        <div class="channel active"><span>🔒</span> General Ops</div>
+        <div class="channel"><span>🔒</span> Officers Only</div>
+        <div class="channel"><span>🔒</span> Veterans Support</div>
+        <div class="channel"><span>🔒</span> Family Network</div>
+      </div>
+      <div class="sidebar-footer">
+        <button class="logout-btn" onclick="logout()">⬡ Logout</button>
+      </div>
+    </div>
+
+    <div class="chat-main">
+      <div class="chat-header">
+        <h3># General Ops</h3>
+        <div class="enc-badge">🔒 End-to-End Encrypted</div>
+      </div>
+      <div class="messages-area" id="messages-area"></div>
+      <div class="chat-input-area">
+        <input
+          type="text"
+          id="msg-input"
+          placeholder="Type a secure message..."
+          onkeydown="if(event.key==='Enter') sendMessage()"
+        />
+        <button class="send-btn" onclick="sendMessage()">Send 🔒</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Auth check ──
+    let user = null;
+    try {
+      const userRaw = sessionStorage.getItem('user');
+      if (!userRaw) {
+        window.location.href = 'index.html';
+      } else {
+        user = JSON.parse(userRaw);
+        document.getElementById('user-name').textContent = user.name;
+        document.getElementById('user-role').textContent = user.role.toUpperCase();
+      }
+    } catch(e) {
+      window.location.href = 'index.html';
+    }
+
+    // ── DLP: Block right-click ──
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
+    // ── DLP: Block copy, print ──
+    document.addEventListener('keydown', e => {
+      if (e.ctrlKey && ['c', 'p', 's'].includes(e.key)) {
+        e.preventDefault();
+        showDLP();
+      }
+    });
+
+    document.addEventListener('copy', e => {
+      e.preventDefault();
+      showDLP();
+    });
+
+    function showDLP() {
+      const warning = document.getElementById('dlp-warning');
+      warning.style.display = 'block';
+      setTimeout(() => { warning.style.display = 'none'; }, 3000);
+    }
+
+    function logout() {
+      sessionStorage.clear();
+      window.location.href = 'index.html';
+    }
+
+    // ── WebSocket ──
+    let ws = null;
+
+    function connectWebSocket() {
+      try {
+        ws = new WebSocket('ws://localhost:3000');
+
+        ws.onopen = () => {
+          if (user) {
+            ws.send(JSON.stringify({ type: 'join', user: user.name }));
+          }
+          loadOldMessages();
+        };
+
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'message') {
+            renderMessage(msg.data);
+          }
+        };
+
+        ws.onerror = (err) => {
+          console.log('WebSocket error:', err);
+        };
+
+        ws.onclose = () => {
+          console.log('WebSocket closed');
+        };
+
+      } catch(e) {
+        console.log('WebSocket failed:', e);
+      }
+    }
+
+    async function loadOldMessages() {
+      try {
+        const res = await fetch('/api/messages');
+        const msgs = await res.json();
+        msgs.forEach(renderMessage);
+      } catch(e) {
+        console.log('Could not load messages:', e);
+      }
+    }
+
+    function renderMessage(msg) {
+      if (!user) return;
+      const area = document.getElementById('messages-area');
+      const isOwn = msg.user === user.name;
+
+      const div = document.createElement('div');
+      div.className = `message ${isOwn ? 'own' : 'other'}`;
+      div.innerHTML = `
+        <div class="msg-meta">${isOwn ? 'You' : msg.user} · ${msg.time}</div>
+        <div class="msg-bubble">${escapeHTML(msg.text)}</div>
+        <div class="msg-lock">🔒 encrypted · forwarding disabled</div>
+      `;
+
+      div.addEventListener('copy', e => {
+        e.preventDefault();
+        showDLP();
+      });
+
+      area.appendChild(div);
+      area.scrollTop = area.scrollHeight;
+    }
+
+    function sendMessage() {
+      const input = document.getElementById('msg-input');
+      const text = input.value.trim();
+      if (!text || !ws) return;
+
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'message',
+          user: user.name,
+          text: text
+        }));
+        input.value = '';
+      } else {
+        alert('Connection lost — please refresh the page');
+      }
+    }
+
+    function escapeHTML(str) {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // ── Start ──
+    if (user) connectWebSocket();
+  </script>
+</body>
+</html>

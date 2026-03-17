@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DefenceComms — Admin Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="admin-layout">
+
+    <!-- Sidebar -->
+    <div class="admin-sidebar">
+      <div class="brand">
+        <h2>🛡️ DefenceComms</h2>
+        <p>HQ ADMIN PANEL</p>
+      </div>
+      <div class="nav-item active">👥 User Management</div>
+      <div class="nav-item">📊 Audit Logs</div>
+      <div class="nav-item">🔒 Security Policy</div>
+      <div class="nav-item">📡 Active Sessions</div>
+      <div class="nav-item" onclick="logout()" style="margin-top:auto; position:absolute; bottom:24px; width:240px;">
+        ⬡ Logout
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="admin-main">
+
+      <div class="admin-topbar">
+        <h1>User Management</h1>
+        <div class="status">🟢 System Secure</div>
+      </div>
+
+      <!-- Stats Row -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="number" id="stat-total">0</div>
+          <div class="label">Total Users</div>
+        </div>
+        <div class="stat-card">
+          <div class="number" id="stat-approved">0</div>
+          <div class="label">Approved</div>
+        </div>
+        <div class="stat-card">
+          <div class="number" id="stat-pending">0</div>
+          <div class="label">Pending Approval</div>
+        </div>
+        <div class="stat-card">
+          <div class="number" id="stat-officers">0</div>
+          <div class="label">Officers</div>
+        </div>
+      </div>
+
+      <!-- User Table -->
+      <div class="section">
+        <h2>All Personnel</h2>
+        <table class="user-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="user-table-body">
+            <!-- Filled by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Audit Log Section -->
+      <div class="section">
+        <h2>Recent Audit Log</h2>
+        <table class="user-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Event</th>
+              <th>User</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="audit-log">
+            <!-- Filled by JS -->
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ── Auth check — admin only ──
+    const userRaw = sessionStorage.getItem('user');
+    if (!userRaw) window.location.href = 'index.html';
+    const user = JSON.parse(userRaw);
+    if (user.role !== 'admin') window.location.href = 'chat.html';
+
+    // ── Audit log entries (simulated) ──
+    const auditEntries = [
+      { time: '09:14:02', event: 'Login attempt', user: 'officer1', status: 'success' },
+      { time: '09:15:44', event: 'Message sent', user: 'officer1', status: 'success' },
+      { time: '09:17:10', event: 'Copy blocked (DLP)', user: 'veteran1', status: 'blocked' },
+      { time: '09:18:33', event: 'Login attempt', user: 'unknown99', status: 'failed' },
+      { time: '09:20:01', event: 'Screenshot blocked', user: 'officer1', status: 'blocked' },
+      { time: '09:21:45', event: 'File upload', user: 'veteran1', status: 'success' },
+    ];
+
+    function logout() {
+      sessionStorage.clear();
+      window.location.href = 'index.html';
+    }
+
+    // ── Load users from API ──
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/users');
+        const users = await res.json();
+
+        // Update stats
+        document.getElementById('stat-total').textContent = users.length;
+        document.getElementById('stat-approved').textContent = users.filter(u => u.approved).length;
+        document.getElementById('stat-pending').textContent = users.filter(u => !u.approved).length;
+        document.getElementById('stat-officers').textContent = users.filter(u => u.role === 'officer').length;
+
+        // Fill table
+        const tbody = document.getElementById('user-table-body');
+        tbody.innerHTML = '';
+
+        users.forEach(u => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${u.name}</td>
+            <td style="color:#4a6080">${u.username}</td>
+            <td><span class="badge ${u.role}">${u.role}</span></td>
+            <td><span class="badge ${u.approved ? 'approved' : 'pending'}">
+              ${u.approved ? '✓ Approved' : '⏳ Pending'}
+            </span></td>
+            <td>
+              ${!u.approved
+                ? `<button class="action-btn approve" onclick="approveUser(${u.id})">✓ Approve</button>`
+                : ''
+              }
+              ${u.role !== 'admin'
+                ? `<button class="action-btn revoke" onclick="revokeUser(${u.id})">✕ Revoke</button>`
+                : '<span style="color:#4a6080;font-size:12px">HQ Protected</span>'
+              }
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+      } catch (e) {
+        console.log('Could not load users');
+      }
+    }
+
+    // ── Approve user ──
+    async function approveUser(id) {
+      await fetch(`/api/users/${id}/approve`, { method: 'POST' });
+      addAuditEntry('User approved', 'admin');
+      loadUsers();
+    }
+
+    // ── Revoke user ──
+    async function revokeUser(id) {
+      if (!confirm('Revoke access for this user?')) return;
+      await fetch(`/api/users/${id}/revoke`, { method: 'POST' });
+      addAuditEntry('Access revoked', 'admin');
+      loadUsers();
+    }
+
+    // ── Render audit log ──
+    function renderAuditLog() {
+      const tbody = document.getElementById('audit-log');
+      tbody.innerHTML = '';
+      auditEntries.slice().reverse().forEach(entry => {
+        const tr = document.createElement('tr');
+        const statusColor = entry.status === 'success'
+          ? '#34d399' : entry.status === 'blocked'
+          ? '#f59e0b' : '#f87171';
+        tr.innerHTML = `
+          <td style="color:#4a6080;font-family:monospace">${entry.time}</td>
+          <td>${entry.event}</td>
+          <td>${entry.user}</td>
+          <td style="color:${statusColor};text-transform:uppercase;font-size:11px;font-weight:600">
+            ${entry.status}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function addAuditEntry(event, user) {
+      const now = new Date().toLocaleTimeString();
+      auditEntries.push({ time: now, event, user, status: 'success' });
+      renderAuditLog();
+    }
+
+    // ── Init ──
+    loadUsers();
+    renderAuditLog();
+  </script>
+</body>
+</html>

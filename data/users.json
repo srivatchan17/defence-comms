@@ -1,0 +1,36 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password": "admin123",
+      "role": "admin",
+      "approved": true,
+      "name": "HQ Administrator"
+    },
+    {
+      "id": 2,
+      "username": "officer1",
+      "password": "pass123",
+      "role": "officer",
+      "approved": true,
+      "name": "Lt. Col. Arjun Singh"
+    },
+    {
+      "id": 3,
+      "username": "veteran1",
+      "password": "pass123",
+      "role": "veteran",
+      "approved": false,
+      "name": "Veteran Raj Kumar"
+    },
+    {
+      "id": 4,
+      "username": "pending1",
+      "password": "pass123",
+      "role": "officer",
+      "approved": false,
+      "name": "Capt. Priya Nair"
+    }
+  ]
+}
